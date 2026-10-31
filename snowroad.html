@@ -313,6 +313,26 @@ button{font:inherit;color:inherit}
 .sr-touchdev .sr-keys{display:none}
 .sr-touchdev .sr-touchnote{display:block}
 .sr-touchdev .sr-go-hint{display:none}
+/* ---------- R13: graphics choice before loading — left «Снежная дорога» (high), right «Снежная дорога лайт» ---------- */
+.sr-pick{position:fixed;inset:0;z-index:90;display:grid;grid-template-columns:1fr 1fr;background:#070a0f}
+.sr-pick-opt{position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;gap:14px;margin:0;border:0;
+  padding:clamp(24px,5vw,72px) max(var(--sr),clamp(24px,5vw,72px)) max(var(--sb),clamp(28px,9vh,96px)) max(var(--sl),clamp(24px,5vw,72px));
+  text-align:left;cursor:pointer;color:var(--ink);background:none;overflow:hidden;outline:none}
+.sr-pick-opt:before{content:"";position:absolute;inset:0;opacity:.62;transition:opacity .35s ease}
+.sr-pick-hi:before{background:radial-gradient(110% 85% at 28% 22%,#4a3420 0%,#21170f 48%,#0b0806 100%)}
+.sr-pick-lite:before{background:radial-gradient(110% 85% at 72% 22%,#1f3346 0%,#101a25 48%,#06090d 100%)}
+.sr-pick-lite{box-shadow:inset 1px 0 0 var(--line)}
+.sr-pick-opt > *{position:relative}
+.sr-pick-opt b{font-family:var(--display);font-weight:700;font-size:clamp(30px,4.4vw,62px);line-height:1;letter-spacing:-.02em;text-wrap:balance}
+.sr-pick-opt span{font-size:clamp(15px,1.35vw,19px);line-height:1.45;color:var(--ink-2);max-width:22em;text-wrap:pretty}
+.sr-pick-opt i{margin-top:12px;padding:14px 30px;border-radius:999px;font-style:normal;font-family:var(--display);font-weight:700;font-size:18px;
+  background:rgba(255,255,255,.08);border:1px solid var(--line);transition:background .2s ease,color .2s ease,border-color .2s ease}
+.sr-pick-opt:hover:before,.sr-pick-opt.on:before,.sr-pick-opt:focus-visible:before{opacity:1}
+.sr-pick-opt:hover i,.sr-pick-opt.on i,.sr-pick-opt:focus-visible i{background:linear-gradient(180deg,#ffe6c6 0%,#ffc786 100%);color:var(--btn-ink);border-color:transparent}
+@media (max-aspect-ratio:1/1){
+  .sr-pick{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .sr-pick-lite{box-shadow:inset 0 1px 0 var(--line)}
+}
 @media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
 </style>
 </head>
@@ -31161,8 +31181,11 @@ const __m_27 = (() => {
 //   ?track=winter|nur|hell · ?auto=1 autopilot · ?cam=chase|far|hood|bumper · ?seed=N · ?nostart=1 · ?s=N (start arc length)
 //   ?tier=lite|low|mid|high (force profile) · ?dynres=0 (freeze render scale, no profile step-down) · ?color=N ·
 //   ?gpubench=0 (skip GPU test) · ?warmall=0 (warm-up without the forced draws, A/B tests). The release is ONE file for every
-//   computer (Round 9: no separate «лайт» file) — the profile comes from the GPU name / benchmark below; only a test build
-//   `tools/build.py --profile <p>` sets window.__FORCE_PROFILE.
+//   computer (Round 9: no separate «лайт» file); a test build `tools/build.py --profile <p>` sets window.__FORCE_PROFILE.
+// Round 13 (Денис 31.10): the player picks the graphics before anything loads — left «Снежная дорога» (high, for strong
+//   computers), right «Снежная дорога лайт» (lite) — mainPickGraphics(). The pick is fixed for the session: the live safety
+//   net never swaps the profile (dynamic resolution still quietly lowers the render size). The automatic choice (GPU name /
+//   benchmark below) is left only for ?nostart=1 test runs. Round 12's reworked automatic choice is in archive/r12c_auto_quality/.
 const THREE = __three;
 const { createAtmosphere } = __m_1;
 const { createTreeKit } = __m_3;
@@ -31428,7 +31451,7 @@ async function mainQuality(params, gl) {
   const gc = mainGpuClass(info);
   let forceBuild = null;
   try { forceBuild = typeof window !== 'undefined' && MAIN_PROFILES[window.__FORCE_PROFILE] ? window.__FORCE_PROFILE : null; } catch (e) { /* ignore */ }
-  const forced = MAIN_PROFILES[params.tier] ? params.tier : forceBuild;
+  const forced = MAIN_PROFILES[params.tier] ? params.tier : forceBuild || (MAIN_PROFILES[params.pick] ? params.pick : null);
   let profile, why;
   let bench = null, benchRuns = null;
   if (touch || small) { profile = gc.cls === 'lite' ? 'lite' : 'low'; why = (touch ? 'touch device' : 'small screen') + (gc.cls === 'lite' ? ', ' + gc.why : ''); }
@@ -31462,9 +31485,9 @@ async function mainQuality(params, gl) {
       }
     }
   }
-  if (forced) { profile = forced; why = forced === params.tier ? 'forced by ?tier' : 'forced by the test build'; }
+  if (forced) { profile = forced; why = forced === params.tier ? 'forced by ?tier' : forced === forceBuild ? 'forced by the test build' : 'picked on the start screen'; }
   const P = MAIN_PROFILES[profile];
-  const q = Object.assign({}, P, { profile, touch, leafShadow: P.leafShadow.slice(), leafShadowSun: P.leafShadowSun.slice(), gpu: info.renderer, gpuVendor: info.vendor, gpuWhy: why, gpuBench: bench, gpuBenchRuns: benchRuns, software: !!gc.software, forced: !!forced });
+  const q = Object.assign({}, P, { profile, touch, leafShadow: P.leafShadow.slice(), leafShadowSun: P.leafShadowSun.slice(), gpu: info.renderer, gpuVendor: info.vendor, gpuWhy: why, gpuBench: bench, gpuBenchRuns: benchRuns, software: !!gc.software, forced: !!forced, picked: forced && forced === params.pick && forced !== params.tier && forced !== forceBuild ? forced : null });
   if (touch && profile === 'low') { q.leafShadow = [25, 40]; q.leafShadowSun = [40, 62]; q.pixelBudget = 0.6e6; }   // phones: shadow pass ~half the GPU
   if (profile === 'lite' && (gc.software || touch)) q.pixelBudget = 0.32e6;   // CPU rendering / old phones: fewer pixels still
   try { const mts = gl.getParameter(gl.MAX_TEXTURE_SIZE); if (mts && mts < q.shadowMapSize) q.shadowMapSize = Math.max(1024, mts); } catch (e) { /* ignore */ }
@@ -31505,9 +31528,71 @@ function mainLoadNurOutline(ui) {
   } catch (e) { /* keep the drawn outline */ }
 }
 
+// R13: the graphics choice — two halves, left high, right lite; mouse / touch, ← → (or 1 / 2) + Enter, gamepad
+// d-pad / stick + A. The last pick is highlighted next time (localStorage, may be blocked — then nothing is highlighted).
+const MAIN_PICK_KEY = 'snowroad.pick';
+function mainPickGraphics() {
+  return new Promise((resolve) => {
+    let last = null;
+    try { last = localStorage.getItem(MAIN_PICK_KEY); } catch (e) { /* storage blocked */ }
+    const el = document.createElement('section');
+    el.className = 'sr-pick';
+    el.setAttribute('aria-label', 'Выбор графики');
+    el.innerHTML =
+      '<button class="sr-pick-opt sr-pick-hi" type="button" data-p="high"><b>Снежная дорога</b><span>Красивая графика — для мощных компьютеров</span><i>Играть</i></button>' +
+      '<button class="sr-pick-opt sr-pick-lite" type="button" data-p="lite"><b>Снежная дорога лайт</b><span>Оптимизирована для слабых компьютеров и ноутбуков</span><i>Играть</i></button>';
+    document.body.appendChild(el);
+    const opts = [...el.querySelectorAll('.sr-pick-opt')];
+    let cur = last === 'lite' ? 1 : 0, done = false, raf = 0, padPrev = -1;
+    const mark = (i, focus) => { cur = i; opts.forEach((o, k) => o.classList.toggle('on', k === i)); if (focus) opts[i].focus({ preventScroll: true }); };
+    if (last === 'high' || last === 'lite') mark(cur, true);
+    const pick = (p) => {
+      if (done) return;
+      done = true;
+      try { localStorage.setItem(MAIN_PICK_KEY, p); } catch (e) { /* ignore */ }
+      removeEventListener('keydown', onKey, true);
+      cancelAnimationFrame(raf);
+      el.remove();
+      if (p === 'lite') document.title = 'Снежная дорога лайт';
+      resolve(p);
+    };
+    opts.forEach((o, i) => {
+      o.addEventListener('click', () => pick(o.dataset.p));
+      o.addEventListener('pointerenter', () => mark(i, false));
+    });
+    const onKey = (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === '1') mark(0, true);
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === '2') mark(1, true);
+      else if (e.key === 'Enter' || e.key === ' ') pick(opts[cur].dataset.p);
+      else return;
+      e.preventDefault();
+    };
+    addEventListener('keydown', onKey, true);
+    // gamepad: edge-triggered; the first poll only records what is already held (a button held from the page load)
+    const poll = () => {
+      raf = requestAnimationFrame(poll);
+      let pads = null;
+      try { pads = navigator.getGamepads(); } catch (e) { return; }
+      const g = pads && [...pads].find((p) => p && p.connected);
+      if (!g) return;
+      const b = (k) => !!(g.buttons[k] && g.buttons[k].pressed), x = g.axes[0] || 0, y = g.axes[1] || 0;
+      const bits = (x < -0.5 || y < -0.5 || b(14) || b(12) ? 1 : 0) | (x > 0.5 || y > 0.5 || b(15) || b(13) ? 2 : 0) | (b(0) ? 4 : 0);
+      const fresh = padPrev < 0 ? 0 : bits & ~padPrev;
+      padPrev = bits;
+      if (fresh & 1) mark(0, true);
+      if (fresh & 2) mark(1, true);
+      if (fresh & 4) pick(opts[cur].dataset.p);
+    };
+    if (navigator.getGamepads) raf = requestAnimationFrame(poll);
+  });
+}
+
 async function mainBoot() {
   window.__ready = false;
   const params = mainParams();
+  let forceBuild = null;
+  try { forceBuild = window.__FORCE_PROFILE; } catch (e) { /* ignore */ }
+  if (!MAIN_PROFILES[params.tier] && !MAIN_PROFILES[forceBuild] && !params.nostart) params.pick = await mainPickGraphics();
   const ui = createUI({ touch: isTouchDevice() });
   const app = document.getElementById('app') || document.body;
 
@@ -31784,8 +31869,9 @@ async function mainStart(params, ui, app, canvas, gl) {
   // the step's pixel budget is given back and no further step is taken for 90 s (not under MAIN_SN_CRAWL fps: the cut is
   // kept and the next step may follow). After 25 s at ≥ 50 fps with the render scale at 1 the last step's pixel budget is given
   // back (step up; never a shader change). No UI; logged to the console and __stats.profileSteps.
+  // R13: off when the player picked the graphics on the start screen — the pick stays (only dynres lowers the render size).
   const SN = {
-    enabled: params.dynres, slow: 0, t: 0, fps: 0, lastStep: -100, steps: [], liteCuts: 0, built: quality.profile, builtTier: quality.tier,
+    enabled: params.dynres && !quality.picked, slow: 0, t: 0, fps: 0, lastStep: -100, steps: [], liteCuts: 0, built: quality.profile, builtTier: quality.tier,
     iv: new Float32Array(15), tmp: new Float32Array(15), ivN: 0, ivI: 0,
     check: null, cpuUntil: -1, undo: [], good: 0, lastUp: -100, noUp: false, compiling: null, pendingB: null, stepFps: 0,
     liteOn: false,
